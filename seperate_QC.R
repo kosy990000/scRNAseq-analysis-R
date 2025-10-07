@@ -1,20 +1,20 @@
 
 # BiocManager 설치 (없다면)
-suppressPackageStartupMessages({
-  library(scran)
-  library(ggplot2)
-  library(Seurat)
-  library(Matrix)
-  library(patchwork)
-  library(stringr)
-  library(scDblFinder)
-  library(dplyr)
+
+library(scran)
+library(ggplot2)
+library(Seurat)
+library(Matrix)
+library(patchwork)
+library(stringr)
+library(scDblFinder)
+library(dplyr)
+library(SingleCellExperiment)
   # library(readr)  # readr 미사용; base R write.csv 사용
-})
+
 
 source("utills/utillsFileIO.R")
 source("utills/utillsQC.R")
-
 
 
 
@@ -29,6 +29,8 @@ dir_list = set_dir_with_10x_cellRanger(root_dir, data_name) # return dir_list (l
 
 file_list = dir_list$file_list
 out_dir = dir_list$out_dir
+
+rc("dir_list")
 
 all_cells_qc <- list()   # 파일별 per-cell QC 테이블 누적
 summary_rows <- list()   # 파일별 요약 누적
@@ -184,11 +186,15 @@ for (f in file_list) {
     !!!outlier_list
   )
   
+  #-- ##
+  base_name <- tools::file_path_sans_ext(fname)           # "xxx.tar.gz" -> "xxx.tar"
+  base_name <- tools::file_path_sans_ext(basename(base_name))  # "xxx.tar" -> "xxx"
   
+  sce_rds_path <- file.path(out_dir, sprintf("%s_passAllQC.sce.rds", base_name))
+  saveRDS(sce_clean, sce_rds_path, compress = "xz")  # 압축률/속도는 "xz" or "gzip" 선택
   
   # 메모리 정리: 정의 안 된 변수는 rm 대상에서 제거
-  rm(sce_after, sce_dbl, sce_clean, qc_before, qc_merged, qc_matrix_file,
-     keep_cells)  # <- 존재하지 않는 genes_outlier, toptwenty_outlier 제거
+  rm(sce_after, sce_dbl, sce_clean, qc_before, qc_merged, qc_matrix_file, keep_cells)  # <- 존재하지 않는 genes_outlier, toptwenty_outlier 제거
   gc()
   
 }
