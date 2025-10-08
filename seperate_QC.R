@@ -9,7 +9,10 @@ suppressPackageStartupMessages({
   library(stringr)
   library(scDblFinder)
   library(dplyr)
-  # library(readr)  # readr 미사용; base R write.csv 사용
+  library(zellkonverter)          # as.Seurat()
+  library(SingleCellExperiment)
+  library(SummarizedExperiment)
+  library(Matrix)
 })
 
 source("utills/utillsFileIO.R")
@@ -22,10 +25,9 @@ source("utills/utillsQC.R")
 # ------------------------- folder path ---------------------- #
 
 # now i'm not sure about root folder, so i direct the excuse dir 
-root_dir = getwd()
-root_dir = paste0(root_dir,"/data")
 data_name = "GSE161340_RAW"
-dir_list = set_dir_with_10x_cellRanger(root_dir, data_name) # return dir_list (list file, output_dir)
+
+dir_list = set_dir_with_10x_cellRanger(data_name) # return dir_list (list file, output_dir)
 
 file_list = dir_list$file_list
 out_dir = dir_list$out_dir
@@ -33,6 +35,7 @@ out_dir = dir_list$out_dir
 all_cells_qc <- list()   # 파일별 per-cell QC 테이블 누적
 summary_rows <- list()   # 파일별 요약 누적
 
+seurat_merged <- NULL
 
 # ---------- 메인 루프 ----------
 
@@ -66,8 +69,7 @@ for (f in file_list) {
   qc_before$barcode    <- rownames(qc_before)
   qc_before$file       <- fname
   qc_before$condition  <- "Before"
-  
-  print("done")
+
   
   # outlier 플래그
   mt_outlier        <- is_outlier(qc_before$pct_counts_mt, 3)
@@ -184,7 +186,27 @@ for (f in file_list) {
     !!!outlier_list
   )
   
+
+  # ---- Seurat로 바로 변환 & 전역 병합 ----
+  assn <- assayNames(sce_clean)
+  counts_layer    <- if ("counts" %in% assn) "counts" else assn[1]
+  logcounts_layer <- if ("logcounts" %in% assn) "logcounts" else counts_layer
   
+  seu_cur <- zellkonverter::as.Seurat(sce_clean,
+                                      counts = counts_layer,
+                                      data   = logcounts_layer)
+  
+  # 샘플 라벨/셀ID 접두사
+  base_name <- tools::file_path_sans_ext(basename(tools::file_path_sans_ext(fname)))
+  seu_cur$sample <- base_name
+  colnames(seu_cur) <- paste0(base_name, "_", colnames(seu_cur))
+  
+  # 누적 병합
+  if (is.null(seurat_merged)) {
+    seurat_merged <- seu_cur
+  } else {
+    seurat_merged <- merge(seurat_merged, seu_cur)
+  }
   
   # 메모리 정리: 정의 안 된 변수는 rm 대상에서 제거
   rm(sce_after, sce_dbl, sce_clean, qc_before, qc_merged, qc_matrix_file,
@@ -198,7 +220,12 @@ for (f in file_list) {
 summary_df <- dplyr::bind_rows(summary_rows) |> dplyr::arrange(file)
 write.csv(summary_df, file = file.path(out_dir, "dataDriven_QC_summary_by_file.csv"), row.names = FALSE)
 
+saveRDS(seurat_merged, file.path(out_dir, "QC_pass.rds"), compress = "xz")
+
 qc_all_cells <- dplyr::bind_rows(all_cells_qc)
 write.csv(qc_all_cells, file = file.path(out_dir, "dataDriven_ALL_files_QC_matrix_with_doublet.csv"), row.names = FALSE)
+
+
+
 
 message("\n[Done] Outputs written to: ", out_dir)

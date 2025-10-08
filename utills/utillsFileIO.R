@@ -33,9 +33,7 @@ file_reader_10x_Genom_cell_ranger <- function(f, project = "scRNA") {
   
   seurat_obj <- CreateSeuratObject(counts = mat, assay = "RNA", project = project)
   
-  sce <- as.SingleCellExperiment(seurat_obj)
-  
-  return (sce)
+  return (seurat_obj)
 }
 
 
@@ -45,7 +43,7 @@ file_reader_10x_Genom_cell_ranger <- function(f, project = "scRNA") {
 # excuse dir -> data -> GSE_data_RAW -> QC_outputs -> figure
 # if select the regular data like normalization
 # set the file_path with strage 
-set_dir_with_10x_cellRanger <- function(root_dir, data_name){
+set_dir_with_10x_cellRanger <- function(data_name){
   folder_path <- getwd()
   
   
@@ -56,4 +54,14 @@ set_dir_with_10x_cellRanger <- function(root_dir, data_name){
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   
   return(list(file_list = file_list, out_dir = out_dir))
+}
+
+
+get_QCpass_data_rds <- function(data_name){
+  folder_path <- getwd()
+  
+  data_path <- paste0(folder_path, "/data/", data_name, "/QC_outputs")
+  file_list <- list.files(path= data_path, pattern = "sce.rds$", full.name = TRUE) |> sort()
+  
+  return(file_list)
 }
