@@ -2,7 +2,7 @@
 # 입출력 즉 tar.gz 내부가 matrix, barcode, feature or genes 일때
 # 입력은 단일 파일로 받음
 # 즉 tar 구조가 tar 풀기 -> 단일 폴더 -> 내부 matrix, barcode, feature or genes 일때
-file_reader_10x_Genom_cell_ranger <- function(f, project = "scRNA") {
+file_reader_10x_Genom_cell_ranger_tar <- function(f, project = "scRNA") {
   # Seruat 설치 확인 여부
   
   # f = tar.gz 파일 경로
@@ -36,6 +36,40 @@ file_reader_10x_Genom_cell_ranger <- function(f, project = "scRNA") {
   return (seurat_obj)
 }
 
+file_reader_10x_Genom_cell_ranger <- function(f, project = "scRNA") {
+  # 파일 경로 탐색
+  matrix_file  <- list.files(f, pattern = "matrix.*mtx\\.gz$", full.names = TRUE)
+  feature_file <- list.files(f, pattern = "features.*tsv\\.gz$", full.names = TRUE)
+  barcode_file <- list.files(f, pattern = "barcodes.*tsv\\.gz$", full.names = TRUE)
+  
+  # 세 파일이 모두 있는지 확인
+  if (length(matrix_file) == 0 || length(feature_file) == 0 || length(barcode_file) == 0) {
+    stop(paste0("Required 10X files not found in: ", f))
+  }
+  
+  # 10x 포맷 수동 로딩
+  counts <- ReadMtx(
+    mtx = matrix_file,
+    features = feature_file,
+    cells = barcode_file
+  )
+  
+  # Seurat 객체 생성
+  seurat_obj <- CreateSeuratObject(
+    counts = counts,
+    project = project,
+    min.cells = 3,
+    min.features = 200
+  )
+  
+  # 샘플명 추가
+  seurat_obj$sample <- basename(f)
+  
+  return(seurat_obj)
+}
+
+
+
 
 # set the project folder path
 # I want setting the path with
@@ -43,7 +77,7 @@ file_reader_10x_Genom_cell_ranger <- function(f, project = "scRNA") {
 # excuse dir -> data -> GSE_data_RAW -> QC_outputs -> figure
 # if select the regular data like normalization
 # set the file_path with strage 
-set_dir_with_10x_cellRanger <- function(data_name){
+set_dir_with_10x_cellRanger_tar <- function(data_name){
   folder_path <- getwd()
   
   
@@ -56,6 +90,22 @@ set_dir_with_10x_cellRanger <- function(data_name){
   return(list(file_list = file_list, out_dir = out_dir))
 }
 
+
+get_folder_list <- function(data_dir){
+  folder_path <- getwd()
+  
+  # 올바른 상대경로 결합 (앞에 슬래시 제거)
+  data_path <- file.path(folder_path, "data", data_dir)
+  
+  # 하위 폴더만 추출 (샘플 폴더 리스트)
+  dir_list <- list.dirs(data_path, full.names = TRUE, recursive = FALSE)
+  
+  # QC 출력 폴더 경로
+  out_dir <- file.path(data_path, "QC_outputs")
+  
+  print(dir_list)
+  return(list(file_list = dir_list, out_dir = out_dir))
+}
 
 get_QCpass_data_rds <- function(data_name){
   folder_path <- getwd()

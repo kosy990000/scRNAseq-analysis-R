@@ -1,5 +1,6 @@
-
 # BiocManager 설치 (없다면)
+
+
 
 suppressPackageStartupMessages({
   library(scran)
@@ -62,11 +63,11 @@ pct_counts_in_top_n_genes <- function(counts_mat, n = 20) {
 
 
 # ------------------------- folder path ---------------------- #
-setwd("/home/ko/scRNA-analysis")
+
 folder_path <- getwd()
-data_path <- "/data/GSE226225_RAW"
+data_path <- "/data/GSE239591_RAW"
 data_path <- paste0(folder_path, data_path)
-file_list <- list.files(path = data_path, pattern = "tsv.gz$", full.names = TRUE) |> sort()
+file_list <- list.dirs(path = data_path, full.names = TRUE) |> sort()
 
 out_dir <- file.path(data_path, "QC_outputs")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
@@ -76,26 +77,40 @@ all_cells_qc <- list()   # 파일별 per-cell QC 테이블 누적
 summary_rows <- list()   # 파일별 요약 누적
 
 
-# ---------- 메인 루프 ----------
-for (f in file_list) {
-  
-  message("\n[Processing] ", f)
-  fname <- basename(f)
-  
-  # f = tar.gz 파일 경로
-  extract_dir <- file.path(tempdir(), tools::file_path_sans_ext(basename(f)))
-  utils::untar(f, exdir = extract_dir)
 
-  # 자동으로 matrix.mtx 파일 위치 찾기
-  mtx_file <- list.files(extract_dir, pattern = "^matrix\\.mtx$", 
-                         full.names = TRUE, recursive = TRUE)
+# ---------- 메인 루프 ----------
+for (folder in file_list) {
+  
+  message("\n[Processing] ", folder)
+  fname <- basename(folder)
+  
   
   # 그 폴더가 data_dir
-  data_dir <- dirname(mtx_file[1])
+  data_dir <- folder
   
-  # 같은 폴더 안에서 barcodes / genes 파일도 자동으로 탐색
-  feat_file <- list.files(data_dir, pattern = "^(features|genes)\\.tsv$", full.names = TRUE)
-  barc_file <- list.files(data_dir, pattern = "^barcodes\\.tsv$", full.names = TRUE)
+
+  # data_dir는 이미 folder로 지정되어 있다고 가정
+  mtx_file <- list.files(data_dir, pattern = "^matrix\\.mtx\\.gz$", full.names = TRUE)
+  feat_file <- list.files(data_dir, pattern = "^(features|genes)\\.tsv\\.gz$", full.names = TRUE)
+  barc_file <- list.files(data_dir, pattern = "^barcodes\\.tsv\\.gz$", full.names = TRUE)
+  
+  # 압축 해제 (.gz -> 원본 유지, 해제본 생성)
+  if (!requireNamespace("R.utils", quietly = TRUE)) install.packages("R.utils")
+  
+  for (f in c(mtx_file, feat_file, barc_file)) {
+    if (file.exists(f)) {
+      R.utils::gunzip(f,
+                      destname = sub("\\.gz$", "", f),
+                      overwrite = TRUE,
+                      remove = FALSE)
+    }
+  }
+  
+  # 해제된 파일로 경로 교체
+  mtx_file <- sub("\\.gz$", "", mtx_file)
+  feat_file <- sub("\\.gz$", "", feat_file)
+  barc_file <- sub("\\.gz$", "", barc_file)
+  
   
   # 이제 ReadMtx에 path만 넘기면 됨
   mat <- ReadMtx(
